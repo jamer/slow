@@ -57,6 +57,7 @@ int main(int argc, char *argv[])
 	}
 
 	signal(SIGINT, resume);
+	signal(SIGQUIT, resume);
 
 	while (true) {
 		wakeup_point += up;
