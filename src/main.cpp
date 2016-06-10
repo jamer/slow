@@ -1,8 +1,11 @@
+#include <signal.h>
+
 #include <chrono>
 #include <iostream>
-#include <signal.h>
-#include <stdio.h>
 #include <thread>
+
+#include "src/args.hpp"
+#include "src/slower.hpp"
 
 using std::chrono::milliseconds;
 using std::chrono::steady_clock;
@@ -13,18 +16,19 @@ using std::endl;
 using std::stoul;
 using std::this_thread::sleep_until;
 
-static pid_t pid;
+static bool running = true;
 
-static void resume(int signum)
-{
-	kill(pid, SIGCONT);
-	exit(1);
+static void stopRunning(int signum) {
+	running = false;
 }
 
-int main(int argc, char *argv[])
-{
+int main(int _argc, char **_argv) {
 	time_point<steady_clock> wakeup_point;
 	milliseconds up, down;
+	int pid;
+
+	argc = _argc;
+	argv = _argv;
 
 	wakeup_point = steady_clock::now();
 	up = milliseconds(10);
@@ -51,28 +55,19 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	if (kill(pid, 0)) {
-		perror("kill");
-		return 1;
-	}
+	std::unique_ptr<Slower> slower = makeUnixSlower(pid);
 
-	signal(SIGINT, resume);
-	signal(SIGQUIT, resume);
+	signal(SIGINT, stopRunning);
+	signal(SIGQUIT, stopRunning);
 
-	while (true) {
+	while (running) {
 		wakeup_point += up;
 		sleep_until(wakeup_point);
-		if (kill(pid, SIGSTOP)) {
-			perror("kill");
-			return 1;
-		}
+		slower->pause();
 
 		wakeup_point += down;
 		sleep_until(wakeup_point);
-		if (kill(pid, SIGCONT)) {
-			perror("kill");
-			return 1;
-		}
+		slower->resume();
 	}
 	return 0;
 }
